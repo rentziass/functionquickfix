@@ -1,10 +1,5 @@
 package functionquickfix_test
 
-// TODO: non identifier args
-// TODO: other functions as args
-// TODO: operations as argument?
-// TODO: consecutive arguments with same type should declare type only once?
-
 import (
 	"fmt"
 	"go/ast"
@@ -18,11 +13,13 @@ import (
 	"github.com/rentziass/functionquickfix"
 )
 
+const undeclaredName = "u"
+
 const primitiveType = `
 package missingfunction
 
 func a(s string) {
-	b(s)
+	u(s)
 }
 `
 
@@ -30,7 +27,28 @@ const argumentsWithSameName = `
 package missingfunction
 
 func a(s string, i int) {
-	d(s, i, s)
+	u(s, i, s)
+}
+`
+
+const errorAsArgument = `
+package missingfunction
+
+func a() {
+	var err error
+	u(err)
+}
+`
+
+const functionReturningMultipleValuesAsArgument = `
+package missingfunction
+
+func a() {
+	u(b())
+}
+
+func b() (string, error) {
+	return "", nil
 }
 `
 
@@ -44,13 +62,25 @@ func a() {
 }
 `
 
+const returnedValuesAsArguments = `
+package missingfunction
+
+import "io"
+
+type T struct {}
+
+func a() {
+	u(io.MultiReader())
+}
+`
+
 const importedType = `
 package missingfunction
 
 import "io"
 
 func a(r io.Reader) {
-	z(r)
+	u(r)
 }
 `
 
@@ -62,57 +92,53 @@ type T struct {}
 func a() {
 	pointer := &T{}
 	var value T
-	f(pointer, value)
+	u(pointer, value)
+}
+`
+
+const operationsAsArguments = `
+package missingfunction
+
+import "time"
+
+func a() {
+	u(10 * time.Second)
 }
 `
 
 func TestFunctionQuickfix(t *testing.T) {
-	tests := []struct {
-		source         string
-		undeclaredName string
-	}{
-		{
-			source:         primitiveType,
-			undeclaredName: "b",
-		},
-		{
-			source:         importedType,
-			undeclaredName: "z",
-		},
-		{
-			source:         nonPrimitiveType,
-			undeclaredName: "f",
-		},
-		{
-			source:         argumentsWithSameName,
-			undeclaredName: "d",
-		},
-		{
-			source:         argumentsWithoutIdentifiers,
-			undeclaredName: "u",
-		},
+	sources := []string{
+		primitiveType,
+		importedType,
+		nonPrimitiveType,
+		argumentsWithSameName,
+		argumentsWithoutIdentifiers,
+		returnedValuesAsArguments,
+		errorAsArgument,
+		functionReturningMultipleValuesAsArgument,
+		operationsAsArguments,
 	}
 
-	for _, testCase := range tests {
+	for _, src := range sources {
 		fset := token.NewFileSet()
-		f, err := parser.ParseFile(fset, "src.go", testCase.source, parser.AllErrors)
+		f, err := parser.ParseFile(fset, "src.go", src, parser.AllErrors)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		shouldHaveUndeclaredName(t, fset, f, testCase.undeclaredName)
+		shouldHaveUndeclaredName(t, fset, f, undeclaredName)
 
-		stub, err := functionquickfix.GenerateFunctionStub(testCase.undeclaredName, testCase.source)
+		stub, err := functionquickfix.GenerateFunctionStub(undeclaredName, src)
 		if err != nil {
 			t.Fatal(err)
 		}
 		fmt.Println(stub)
 
-		newSource := testCase.source + "\n" + stub
+		newSource := src + "\n" + stub
 		fset = token.NewFileSet()
 		f, err = parser.ParseFile(fset, "src.go", newSource, parser.AllErrors)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatal(err, newSource)
 		}
 		shouldNotHaveErrors(t, fset, f)
 	}

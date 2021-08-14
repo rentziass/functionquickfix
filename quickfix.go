@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"strings"
 	"unicode"
 )
 
@@ -62,10 +63,27 @@ func GenerateFunctionStub(undeclaredName string, source string) (string, error) 
 			return "", fmt.Errorf("could not determine type of arg %v", arg)
 		}
 
-		stubArgs = append(stubArgs, Arg{
-			Name: exprToString(arg),
-			Type: types.Default(ty),
-		})
+		switch t := ty.(type) {
+		case *types.Tuple:
+			n := t.Len()
+			for i := 0; i < n; i++ {
+				stubArgs = append(stubArgs, Arg{
+					Name: typeStringToVarName(t.At(i).Type()),
+					Type: types.Default(t.At(i).Type()),
+				})
+			}
+		default:
+			// does the argument have a name we can reuse?
+			name := exprToString(arg)
+			if name == "" {
+				name = typeStringToVarName(ty)
+			}
+
+			stubArgs = append(stubArgs, Arg{
+				Name: name,
+				Type: types.Default(ty),
+			})
+		}
 	}
 
 	stub := generateFuncStub(exprToString(callExpr.Fun), stubArgs)
@@ -132,15 +150,20 @@ func exprToString(expr ast.Expr) string {
 	case *ast.Ident:
 		return e.Name
 	case *ast.BasicLit:
-		return tokenToArgName(e.Kind)
+		// let name be handled by types
+		return ""
 	case *ast.CompositeLit:
-		return typeStringToVarName(fmt.Sprintf("%v", e.Type))
+		// let name be handled by types
+		return ""
 	case *ast.UnaryExpr:
 		return exprToString(e.X)
+	case *ast.CallExpr:
+		// let name be handled by types
+		return ""
+	default:
+		// let name be handled by types
+		return ""
 	}
-	fmt.Printf("%T\n", expr)
-	s := fmt.Sprintf("%v", expr)
-	return s
 }
 
 type inspector func(ast.Node) bool
@@ -152,26 +175,23 @@ func (f inspector) Visit(node ast.Node) ast.Visitor {
 	return nil
 }
 
-func tokenToArgName(t token.Token) string {
-	switch t {
-	case token.INT:
-		return "i"
-	case token.FLOAT:
-		return "f"
-	case token.IMAG:
-		return "im"
-	case token.CHAR:
-		return "char"
-	case token.STRING:
-		return "s"
+func typeStringToVarName(ty types.Type) string {
+	s := types.Default(ty).String()
+	s = strings.TrimLeft(s, "*") // if type is a pointer get rid of '*'
 
-	default:
-		return ""
+	// use first letter in type name for basic types
+	_, isBasic := ty.(*types.Basic)
+	if isBasic {
+		return s[0:1]
 	}
-}
 
-func typeStringToVarName(s string) string {
-	a := []rune(s)
+	if s == "error" {
+		return "err"
+	}
+
+	// remove package (if present)
+	parts := strings.Split(s, ".")
+	a := []rune(parts[len(parts)-1])
 	a[0] = unicode.ToLower(a[0])
 	return string(a)
 }
