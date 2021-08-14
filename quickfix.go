@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"unicode"
 )
 
 type Arg struct {
@@ -63,7 +64,7 @@ func GenerateFunctionStub(undeclaredName string, source string) (string, error) 
 
 		stubArgs = append(stubArgs, Arg{
 			Name: exprToString(arg),
-			Type: ty,
+			Type: types.Default(ty),
 		})
 	}
 
@@ -127,7 +128,19 @@ func ensureArgsUniqueness(args Args) Args {
 }
 
 func exprToString(expr ast.Expr) string {
-	return fmt.Sprintf("%v", expr)
+	switch e := expr.(type) {
+	case *ast.Ident:
+		return e.Name
+	case *ast.BasicLit:
+		return tokenToArgName(e.Kind)
+	case *ast.CompositeLit:
+		return typeStringToVarName(fmt.Sprintf("%v", e.Type))
+	case *ast.UnaryExpr:
+		return exprToString(e.X)
+	}
+	fmt.Printf("%T\n", expr)
+	s := fmt.Sprintf("%v", expr)
+	return s
 }
 
 type inspector func(ast.Node) bool
@@ -137,4 +150,28 @@ func (f inspector) Visit(node ast.Node) ast.Visitor {
 		return f
 	}
 	return nil
+}
+
+func tokenToArgName(t token.Token) string {
+	switch t {
+	case token.INT:
+		return "i"
+	case token.FLOAT:
+		return "f"
+	case token.IMAG:
+		return "im"
+	case token.CHAR:
+		return "char"
+	case token.STRING:
+		return "s"
+
+	default:
+		return ""
+	}
+}
+
+func typeStringToVarName(s string) string {
+	a := []rune(s)
+	a[0] = unicode.ToLower(a[0])
+	return string(a)
 }

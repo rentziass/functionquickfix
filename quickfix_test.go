@@ -1,6 +1,8 @@
 package functionquickfix_test
 
-// TODO: uniqueness in generated arguments names
+// TODO: non identifier args
+// TODO: other functions as args
+// TODO: operations as argument?
 // TODO: consecutive arguments with same type should declare type only once?
 
 import (
@@ -29,6 +31,16 @@ package missingfunction
 
 func a(s string, i int) {
 	d(s, i, s)
+}
+`
+
+const argumentsWithoutIdentifiers = `
+package missingfunction
+
+type T struct {}
+
+func a() {
+	u("hey compiler", T{}, &T{})
 }
 `
 
@@ -74,6 +86,10 @@ func TestFunctionQuickfix(t *testing.T) {
 		{
 			source:         argumentsWithSameName,
 			undeclaredName: "d",
+		},
+		{
+			source:         argumentsWithoutIdentifiers,
+			undeclaredName: "u",
 		},
 	}
 
