@@ -1,7 +1,6 @@
 package functionquickfix_test
 
 // TODO: uniqueness in generated arguments names
-// TODO: use non-primitive types
 
 import (
 	"fmt"
@@ -12,14 +11,9 @@ import (
 	"go/types"
 	"strings"
 	"testing"
+
+	"github.com/rentziass/functionquickfix"
 )
-
-type Arg struct {
-	Name string
-	Type types.Type
-}
-
-type Args []Arg
 
 const missingFunctionPrimitiveType = `
 package missingfunction
@@ -79,51 +73,10 @@ func TestFunctionQuickfix(t *testing.T) {
 
 		shouldHaveUndeclaredName(t, fset, f, testCase.undeclaredName)
 
-		var callExpr *ast.CallExpr
-		var args []ast.Expr
-
-		newInspector := func(targetName string) inspector {
-			return func(n ast.Node) bool {
-				switch s := n.(type) {
-				case *ast.CallExpr:
-					if exprToString(s.Fun) == targetName {
-						callExpr = s
-						args = s.Args
-					}
-
-					return false
-				}
-				return true
-			}
+		stub, err := functionquickfix.GenerateFunctionStub(testCase.undeclaredName, testCase.source)
+		if err != nil {
+			t.Fatal(err)
 		}
-
-		ast.Walk(newInspector(testCase.undeclaredName), f)
-
-		// found all types, don't stop at error
-		info := types.Info{
-			Types: map[ast.Expr]types.TypeAndValue{},
-		}
-		conf := types.Config{
-			Importer: importer.Default(),
-			Error: func(err error) {
-			},
-		}
-		_, _ = conf.Check("fib", fset, []*ast.File{f}, &info)
-
-		var stubArgs Args
-		for _, arg := range args {
-			ty := info.TypeOf(arg)
-			if ty == nil {
-				t.Fatalf("nil type for arg %v", arg)
-			}
-
-			stubArgs = append(stubArgs, Arg{
-				Name: exprToString(arg),
-				Type: ty,
-			})
-		}
-
-		stub := generateFuncStub(exprToString(callExpr.Fun), stubArgs)
 		fmt.Println(stub)
 
 		newSource := testCase.source + "\n" + stub
@@ -134,15 +87,6 @@ func TestFunctionQuickfix(t *testing.T) {
 		}
 		shouldNotHaveErrors(t, fset, f)
 	}
-}
-
-type inspector func(ast.Node) bool
-
-func (f inspector) Visit(node ast.Node) ast.Visitor {
-	if f(node) {
-		return f
-	}
-	return nil
 }
 
 func shouldHaveUndeclaredName(t *testing.T, fset *token.FileSet, f *ast.File, name string) {
@@ -161,28 +105,6 @@ func shouldHaveUndeclaredName(t *testing.T, fset *token.FileSet, f *ast.File, na
 	if !strings.Contains(err.Error(), "undeclared name: "+name) {
 		t.Fatalf("%s function should be undeclared, got %s", name, err.Error())
 	}
-}
-
-func generateFuncStub(name string, args Args) string {
-	return "func " + name + generateArgsListStub(args) + " {}"
-}
-
-func generateArgsListStub(args Args) string {
-	s := "("
-
-	for i, arg := range args {
-		s += arg.Name + " " + arg.Type.String()
-		if i != len(args)-1 {
-			s += ", "
-		}
-	}
-
-	s += ")"
-	return s
-}
-
-func exprToString(expr ast.Expr) string {
-	return fmt.Sprintf("%v", expr)
 }
 
 func shouldNotHaveErrors(t *testing.T, fset *token.FileSet, f *ast.File) {
