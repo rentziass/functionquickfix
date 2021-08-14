@@ -68,7 +68,7 @@ func GenerateFunctionStub(undeclaredName string, source string) (string, error) 
 			n := t.Len()
 			for i := 0; i < n; i++ {
 				stubArgs = append(stubArgs, Arg{
-					Name: typeStringToVarName(t.At(i).Type()),
+					Name: typeToArgName(t.At(i).Type()),
 					Type: types.Default(t.At(i).Type()),
 				})
 			}
@@ -76,7 +76,7 @@ func GenerateFunctionStub(undeclaredName string, source string) (string, error) 
 			// does the argument have a name we can reuse?
 			name := exprToString(arg)
 			if name == "" {
-				name = typeStringToVarName(ty)
+				name = typeToArgName(ty)
 			}
 
 			stubArgs = append(stubArgs, Arg{
@@ -175,21 +175,29 @@ func (f inspector) Visit(node ast.Node) ast.Visitor {
 	return nil
 }
 
-func typeStringToVarName(ty types.Type) string {
+func typeToArgName(ty types.Type) string {
 	s := types.Default(ty).String()
-	s = strings.TrimLeft(s, "*") // if type is a pointer get rid of '*'
 
-	// use first letter in type name for basic types
-	_, isBasic := ty.(*types.Basic)
-	if isBasic {
+	switch t := ty.(type) {
+	case *types.Basic:
+		// use first letter in type name for basic types
 		return s[0:1]
+	case *types.Slice:
+		// use element type to decide var name for slices
+		return typeToArgName(t.Elem())
+	case *types.Array:
+		// use element type to decide var name for arrays
+		return typeToArgName(t.Elem())
 	}
+
+	s = strings.TrimLeft(s, "*") // if type is a pointer get rid of '*'
 
 	if s == "error" {
 		return "err"
 	}
 
 	// remove package (if present)
+	// and make first letter lowercase
 	parts := strings.Split(s, ".")
 	a := []rune(parts[len(parts)-1])
 	a[0] = unicode.ToLower(a[0])

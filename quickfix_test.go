@@ -106,6 +106,14 @@ func a() {
 }
 `
 
+const sliceAsArgument = `
+package missingfunction
+
+func a() {
+	u([]int{1, 2})
+}
+`
+
 func TestFunctionQuickfix(t *testing.T) {
 	sources := []string{
 		primitiveType,
@@ -117,6 +125,7 @@ func TestFunctionQuickfix(t *testing.T) {
 		errorAsArgument,
 		functionReturningMultipleValuesAsArgument,
 		operationsAsArguments,
+		sliceAsArgument,
 	}
 
 	for _, src := range sources {
