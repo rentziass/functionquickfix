@@ -67,8 +67,6 @@ package missingfunction
 
 import "io"
 
-type T struct {}
-
 func a() {
 	u(io.MultiReader())
 }
@@ -141,7 +139,7 @@ func TestFunctionQuickfix(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		fmt.Println(stub)
+		// fmt.Println(stub)
 
 		newSource := src + "\n" + stub
 		fset = token.NewFileSet()
@@ -150,6 +148,9 @@ func TestFunctionQuickfix(t *testing.T) {
 			t.Fatal(err, newSource)
 		}
 		shouldNotHaveErrors(t, fset, f)
+
+		fmt.Println("----------")
+		fmt.Println(newSource)
 	}
 }
 
