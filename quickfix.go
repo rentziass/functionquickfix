@@ -76,9 +76,10 @@ func generateFuncStub(name string, args Args) string {
 }
 
 func generateArgsListStub(args Args) string {
+	uniqueArgs := ensureArgsUniqueness(args)
 	s := "("
 
-	for i, arg := range args {
+	for i, arg := range uniqueArgs {
 		s += arg.Name + " " + arg.Type.String()
 		if i != len(args)-1 {
 			s += ", "
@@ -87,6 +88,42 @@ func generateArgsListStub(args Args) string {
 
 	s += ")"
 	return s
+}
+
+func ensureArgsUniqueness(args Args) Args {
+	occurrences := map[string]int{}
+	for _, arg := range args {
+		occurrences[arg.Name]++
+	}
+
+	aliases := map[string][]string{}
+	for name, occs := range occurrences {
+		if occs <= 1 {
+			continue
+		}
+		for i := 1; i <= occs; i++ {
+			aliases[name] = append(aliases[name], name+fmt.Sprintf("%d", i))
+		}
+	}
+
+	var newArgs Args
+	for _, arg := range args {
+		aliasesForName, shouldUseAlias := aliases[arg.Name]
+		if !shouldUseAlias {
+			newArgs = append(newArgs, arg)
+			continue
+		}
+
+		alias := aliasesForName[0]
+		aliases[arg.Name] = aliases[arg.Name][1:]
+
+		newArgs = append(newArgs, Arg{
+			Name: alias,
+			Type: arg.Type,
+		})
+	}
+
+	return newArgs
 }
 
 func exprToString(expr ast.Expr) string {

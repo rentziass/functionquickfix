@@ -1,6 +1,7 @@
 package functionquickfix_test
 
 // TODO: uniqueness in generated arguments names
+// TODO: consecutive arguments with same type should declare type only once?
 
 import (
 	"fmt"
@@ -15,7 +16,7 @@ import (
 	"github.com/rentziass/functionquickfix"
 )
 
-const missingFunctionPrimitiveType = `
+const primitiveType = `
 package missingfunction
 
 func a(s string) {
@@ -23,7 +24,15 @@ func a(s string) {
 }
 `
 
-const missingFunctionNonPrimitiveType = `
+const argumentsWithSameName = `
+package missingfunction
+
+func a(s string, i int) {
+	d(s, i, s)
+}
+`
+
+const importedType = `
 package missingfunction
 
 import "io"
@@ -33,7 +42,7 @@ func a(r io.Reader) {
 }
 `
 
-const missingFunctionCustomType = `
+const nonPrimitiveType = `
 package missingfunction
 
 type T struct {}
@@ -51,16 +60,20 @@ func TestFunctionQuickfix(t *testing.T) {
 		undeclaredName string
 	}{
 		{
-			source:         missingFunctionPrimitiveType,
+			source:         primitiveType,
 			undeclaredName: "b",
 		},
 		{
-			source:         missingFunctionNonPrimitiveType,
+			source:         importedType,
 			undeclaredName: "z",
 		},
 		{
-			source:         missingFunctionCustomType,
+			source:         nonPrimitiveType,
 			undeclaredName: "f",
+		},
+		{
+			source:         argumentsWithSameName,
+			undeclaredName: "d",
 		},
 	}
 
