@@ -32,7 +32,7 @@ func GenerateFunctionStub(undeclaredName string, source string) (string, error) 
 		return func(n ast.Node) bool {
 			switch s := n.(type) {
 			case *ast.CallExpr:
-				if exprToString(s.Fun) == targetName {
+				if callExprName(s) == targetName {
 					callExpr = s
 					args = s.Args
 				}
@@ -74,7 +74,12 @@ func GenerateFunctionStub(undeclaredName string, source string) (string, error) 
 			}
 		default:
 			// does the argument have a name we can reuse?
-			name := exprToString(arg)
+			// only happens in case of a *ast.Ident
+			var name string
+			if ident, ok := arg.(*ast.Ident); ok {
+				name = ident.Name
+			}
+
 			if name == "" {
 				name = typeToArgName(ty)
 			}
@@ -86,7 +91,7 @@ func GenerateFunctionStub(undeclaredName string, source string) (string, error) 
 		}
 	}
 
-	stub := generateFuncStub(exprToString(callExpr.Fun), stubArgs)
+	stub := generateFuncStub(callExprName(callExpr), stubArgs)
 	return stub, nil
 }
 
@@ -110,11 +115,15 @@ func generateArgsListStub(args Args) string {
 }
 
 func ensureArgsUniqueness(args Args) Args {
+	// count all occurrences of the same arg name
 	occurrences := map[string]int{}
 	for _, arg := range args {
 		occurrences[arg.Name]++
 	}
 
+	// prepare new names (aliases) for differrent
+	// occurrences of the same arg name:
+	// (a, a) -> (a1, a2)
 	aliases := map[string][]string{}
 	for name, occs := range occurrences {
 		if occs <= 1 {
@@ -125,6 +134,9 @@ func ensureArgsUniqueness(args Args) Args {
 		}
 	}
 
+	// build new list of args with unique names,
+	// after using of the new names remove it from the pool.
+	// If there are no aliases use the original identifier.
 	var newArgs Args
 	for _, arg := range args {
 		aliasesForName, shouldUseAlias := aliases[arg.Name]
@@ -143,27 +155,6 @@ func ensureArgsUniqueness(args Args) Args {
 	}
 
 	return newArgs
-}
-
-func exprToString(expr ast.Expr) string {
-	switch e := expr.(type) {
-	case *ast.Ident:
-		return e.Name
-	case *ast.BasicLit:
-		// let name be handled by types
-		return ""
-	case *ast.CompositeLit:
-		// let name be handled by types
-		return ""
-	case *ast.UnaryExpr:
-		return exprToString(e.X)
-	case *ast.CallExpr:
-		// let name be handled by types
-		return ""
-	default:
-		// let name be handled by types
-		return ""
-	}
 }
 
 type inspector func(ast.Node) bool
@@ -202,4 +193,13 @@ func typeToArgName(ty types.Type) string {
 	a := []rune(parts[len(parts)-1])
 	a[0] = unicode.ToLower(a[0])
 	return string(a)
+}
+
+func callExprName(callExpr *ast.CallExpr) string {
+	ident, ok := callExpr.Fun.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+
+	return ident.Name
 }
